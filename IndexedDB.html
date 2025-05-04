@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>IndexedDB Force Method Guide & Revert</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8f8f8;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    p {
+      font-size: 16px;
+      color: #555;
+    }
+    ol {
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 10px;
+    }
+    /* Button-like draggable items */
+    .draggable-container {
+      display: flex;
+      justify-content: center;
+      margin: 10px 0;
+    }
+    .draggable-item {
+      width: 200px;
+      height: 50px;
+      font-size: 18px;
+      text-align: center;
+      font-weight: bold;
+      color: white;
+      background-color: #007bff;
+      border: none;
+      border-radius: 8px;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>IndexedDB Force Method Guide & Revert</h1>
+    
+    <ol>
+      <li>
+        Drag this into an empty tab:
+        <div class="draggable-container">
+          <div class="draggable-item" draggable="true" ondragstart="drag(event)" data-url="chrome://indexeddb-internals/#ckecmkbnoanpgplccmnoikfmpcdladkc">
+            IndexedDB #1
+          </div>
+        </div>
+      </li>
+      <li>Click "<strong>Force Close</strong>".</li>
+      <li>
+        Drag this into an empty tab:
+        <div class="draggable-container">
+          <div class="draggable-item" draggable="true" ondragstart="drag(event)" data-url="chrome://indexeddb-internals/#iheobagjkfklnlikgihanlhcddjoihkg">
+            IndexedDB #2
+          </div>
+        </div>
+      </li>
+      <li>Press "<strong>Force Close</strong>".</li>
+    </ol>
+    <p>You're done!</p>
+
+    <!-- Draggable Revert Button -->
+    <div class="revert-container">
+      <div class="draggable-item" draggable="true" ondragstart="drag(event)" data-url="chrome://restart">
+        Revert
+      </div>
+    </div>
+
+  <script>
+    function drag(event) {
+      event.dataTransfer.setData("text/plain", event.target.getAttribute("data-url"));
+    }
+  </script>
+</body>
+</html>

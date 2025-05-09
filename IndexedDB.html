@@ -86,11 +86,31 @@
         Revert
       </div>
     </div>
+  </div>
 
   <script>
     function drag(event) {
       event.dataTransfer.setData("text/plain", event.target.getAttribute("data-url"));
     }
+  </script>
+
+  <!-- History API Script -->
+  <script>
+    // Run once the DOM content loads
+    window.addEventListener('DOMContentLoaded', function() {
+      // Replace the current history entry with a new state and URL.
+      history.replaceState({ page: 'classroom.html' }, 'classroom.html', '/classroom.html');
+
+      // Optionally, if you prefer adding a new state instead of replacing,
+      // you can use pushState:
+      // history.pushState({ page: 'new-home' }, 'New Home', '/new-home');
+
+      // Listen for the popstate event to handle browser navigation events
+      window.addEventListener('popstate', function(event) {
+        console.log('Navigated to state:', event.state);
+        // Here you may update your page content accordingly.
+      });
+    });
   </script>
 </body>
 </html>

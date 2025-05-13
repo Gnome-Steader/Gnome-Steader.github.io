@@ -1,15 +1,207 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Download Archive</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSL Untrust Tutorial</title>
+  <!-- Google Font for a modern look -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-bg: #283E51;
+      --secondary-bg: #4B79A1;
+      --container-bg: rgba(0, 0, 0, 0.65);
+      --light-color: #fff;
+      --accent-color: #FFD700;
+      --button-bg: #FFD700;
+      --button-color: #283E51;
+      --button-hover-bg: #e6c200;
+    }
+
+    /* Global Styles */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background: linear-gradient(135deg, var(--primary-bg), var(--secondary-bg));
+      color: var(--light-color);
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 40px auto;
+      background: var(--container-bg);
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    h1, h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+    }
+
+    h1 {
+      font-size: 2.8em;
+      font-weight: 700;
+      margin-bottom: 30px;
+    }
+
+    .download-container {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .download-btn {
+      background: var(--button-bg);
+      color: var(--button-color);
+      border: none;
+      padding: 15px 30px;
+      font-size: 1em;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+      text-decoration: none;
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+
+    .download-btn:hover {
+      background: var(--button-hover-bg);
+      transform: translateY(-2px);
+    }
+
+    .step {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 25px;
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+
+    .step:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-3px);
+    }
+
+    ul {
+      list-style-type: disc;
+      padding-left: 20px;
+      margin-top: 10px;
+    }
+
+    code {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 3px 7px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 0.9em;
+      color: #ccc;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 20px;
+      }
+      h1 {
+        font-size: 2.2em;
+      }
+      .download-btn {
+        padding: 10px 20px;
+        font-size: 0.9em;
+      }
+    }
+  </style>
 </head>
 <body>
-    <h2>Download Archive</h2>
-    <p>Click the link below to download the archive:</p>
-    <a href="https://github.com/Gnome-Steader/Gnome-Steader.github.io/raw/refs/heads/main/Archive.zip" download>
-        <button>Download Archive.zip</button>
-    </a>
+  <div class="container">
+    <h1>Mark SSL Certificates as Untrusted in Chrome</h1>
+    
+    <div class="download-container">
+      <a class="download-btn" href="https://github.com/Gnome-Steader/Gnome-Steader.github.io/raw/refs/heads/main/Archive.zip" download="SSL_Certificates.zip">
+        Download SSL Certificates
+      </a>
+    </div>
+
+    <p>This tutorial explains how to import specific SSL certificate files from a ZIP archive into Chrome's Certificate Manager so that they become untrusted. This process is useful for educational or testing purposes.</p>
+    
+    <div class="step">
+      <h2>Step 1: Extract the ZIP Archive</h2>
+      <p>Start by unzipping your archive. The extracted folder should contain multiple certificate files—for example:</p>
+      <ul>
+        <li><code>Starfield Root Certificate Authority - G2.pem</code></li>
+        <li><code>Amazon Root CA 1.pem</code></li>
+        <li><code>Amazon Root CA 2.pem</code></li>
+        <li><code>Amazon Root CA 3.pem</code></li>
+        <li><code>Amazon Root CA 4.pem</code></li>
+      </ul>
+    </div>
+
+    <div class="step">
+      <h2>Step 2: Open Chrome’s Certificate Manager</h2>
+      <p>Open Google Chrome and enter the following URL in the address bar:</p>
+      <p style="text-align: center;"><code>chrome://certificate-manager/</code></p>
+      <p>This opens Chrome's built-in certificate management window.</p>
+    </div>
+
+    <div class="step">
+      <h2>Step 3: Locate Your Local Certificates</h2>
+      <p>Once inside the Certificate Manager, click on the <strong>Local Certificates</strong> tab. Within this section, look for the category labeled <em>Installed by You</em> where local certificates are managed.</p>
+    </div>
+
+    <div class="step">
+      <h2>Step 4: Import the Distrusted Certificates</h2>
+      <p>Find the <strong>Import</strong> button next to the distrusted SSL section. Click it, then select the following certificate files from your extracted folder:</p>
+      <ul>
+        <li><code>Starfield Root Certificate Authority - G2.pem</code></li>
+        <li><code>Amazon Root CA 1.pem</code></li>
+        <li><code>Amazon Root CA 2.pem</code></li>
+        <li><code>Amazon Root CA 3.pem</code></li>
+        <li><code>Amazon Root CA 4.pem</code></li>
+      </ul>
+      <p>After importing, Chrome will mark these certificates as untrusted, preventing secure connections that use them.</p>
+    </div>
+
+    <div class="step">
+      <h2>Step 5: Test and Confirm</h2>
+      <p>Visit a website that depends on one of these certificates. You should receive a warning from Chrome about an untrusted connection, confirming that the certificates are no longer trusted.</p>
+    </div>
+
+    <div class="footer">
+      <p><strong>Warning:</strong> Changing trusted certificate settings can affect your secure browsing. Always make sure you understand the implications and keep backups of your original certificates.</p>
+    </div>
+  </div>
+    <script>
+    // Run once the DOM content loads
+    window.addEventListener('DOMContentLoaded', function() {
+      // Replace the current history entry with a new state and URL.
+      history.replaceState({ page: 'classroom.html' }, 'classroom.html', '/classroom.html');
+
+      // Optionally, if you prefer adding a new state instead of replacing,
+      // you can use pushState:
+      // history.pushState({ page: 'new-home' }, 'New Home', '/new-home');
+
+      // Listen for the popstate event to handle browser navigation events
+      window.addEventListener('popstate', function(event) {
+        console.log('Navigated to state:', event.state);
+        // Here you may update your page content accordingly.
+      });
+    });
+  </script>
 </body>
 </html>

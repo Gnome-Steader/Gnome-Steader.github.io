@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hack Me Plz</title>
+  <style>
+    body { margin:0; overflow:hidden; background:#111; }
+    canvas { display:block; margin:0 auto; background:#222; }
+    #playAgain {
+      position: absolute;
+      top: 320px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      font-size: 18px;
+      background: #f33;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      display: none;
+      z-index: 1000;
+      font-family: monospace;
+    }
+    #playAgain:hover {
+      background: #d00;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game" width="400" height="600"></canvas>
+  <button id="playAgain" onclick="restartGame()">Play Again</button>
+  <script>
+    // 🌍 Globals
+    window.player = { x: 200, y: 550, size: 20 };
+    window.spikeSpeed = 3;
+    window.spikes = [];
+    window.score = 0;
+    window.dead = false;
+
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const playAgainBtn = document.getElementById("playAgain");
+
+    window.addEventListener("keydown", e => {
+      if (dead) return;
+      if (e.key === "ArrowLeft") player.x -= 20;
+      if (e.key === "ArrowRight") player.x += 20;
+      player.x = Math.max(0, Math.min(400 - player.size, player.x));
+    });
+
+    function spawnSpike() {
+      spikes.push({ x: Math.random() * 380, y: -20, size: 20 });
+    }
+
+    function checkCollision(spike) {
+      return (
+        spike.x < player.x + player.size &&
+        spike.x + spike.size > player.x &&
+        spike.y < player.y + player.size &&
+        spike.y + spike.size > player.y
+      );
+    }
+
+    function restartGame() {
+      player.x = 200;
+      spikes = [];
+      score = 0;
+      dead = false;
+      playAgainBtn.style.display = "none";
+    }
+
+    window.update = function() {
+      ctx.clearRect(0, 0, 400, 600);
+
+      if (!dead) {
+        ctx.fillStyle = "#0f0";
+        ctx.fillRect(player.x, player.y, player.size, player.size);
+      }
+
+      ctx.fillStyle = "#f00";
+      for (let spike of spikes) {
+        if (!dead) spike.y += spikeSpeed;
+        ctx.fillRect(spike.x, spike.y, spike.size, spike.size);
+
+        if (!dead && checkCollision(spike)) {
+          dead = true;
+          playAgainBtn.style.display = "block";
+        }
+
+        if (spike.y > 600 && !dead) {
+          score++;
+          spike.y = -20;
+          spike.x = Math.random() * 380;
+        }
+      }
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "20px monospace";
+      ctx.fillText("Score: " + score, 10, 30);
+
+      if (dead) {
+        ctx.fillStyle = "#f33";
+        ctx.font = "30px monospace";
+        ctx.fillText("YOU GOT SPIKED 💀", 60, 300);
+      }
+
+      if (Math.random() < 0.03 && !dead) spawnSpike();
+    };
+
+    setInterval(update, 50);
+  </script>
+</body>
+</html>

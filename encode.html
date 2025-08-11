@@ -2,188 +2,159 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>8-Layer Obfuscator</title>
+  <title>7-Layer Obfuscator</title>
   <style>
-    body {
-      font-family: monospace;
-      background: #111;
-      color: #eee;
-      padding: 2em;
-    }
-    textarea {
-      width: 100%;
-      height: 100px;
-      font-size: 1em;
-      margin-bottom: 1em;
-      background: #222;
-      color: #0f0;
-      border: none;
-      padding: 1em;
-    }
-    button {
-      padding: 0.5em 1em;
-      font-size: 1em;
-      margin-right: 1em;
-      background: #333;
-      color: #fff;
-      border: none;
-      cursor: pointer;
-    }
-    #output {
-      white-space: pre-wrap;
-      background: #222;
-      padding: 1em;
-      border: 1px solid #444;
-      margin-top: 1em;
-    }
+    body { font-family: monospace; background: #111; color: #eee; padding: 2em; }
+    textarea { width: 100%; height: 120px; font-size: 1em; margin-bottom: 1em; background: #222; color: #0f0; border: none; padding: 1em; }
+    button { padding: 0.5em 1em; font-size: 1em; margin-right: 0.5em; background: #333; color: #fff; border: none; cursor: pointer; }
+    #output { white-space: pre-wrap; background: #222; padding: 1em; border: 1px solid #444; margin-top: 1em; min-height: 4em; }
   </style>
 </head>
 <body>
-  <h1>🧪 8-Layer Obfuscator</h1>
-  <textarea id="input" placeholder="Enter your message..."></textarea>
-  <br>
+  <h1>🧪 7-Layer Obfuscator</h1>
+
+  <textarea id="input" placeholder="Enter your message..."></textarea><br>
   <button onclick="encode()">Encode</button>
   <button onclick="decode()">Decode</button>
   <button onclick="copyOutput()">Copy</button>
+  <button onclick="clearAll()">Clear</button>
 
-  <h2>Result:</h2>
+  <h2>Result</h2>
   <div id="output"></div>
 
   <script>
+    // ---- Base63 (custom) ----
     const base63chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+";
-    const base63map = {};
-    for (let i = 0; i < base63chars.length; i++) base63map[base63chars[i]] = i;
-
-    const zalgoUp = [ '\u030d','\u030e','\u0304','\u0305','\u033f','\u0311','\u0306','\u0310','\u0352','\u0357','\u0351','\u0307','\u0308','\u030a','\u0342','\u0343','\u0344','\u034a','\u034b','\u034c','\u0303','\u0302','\u030c','\u0350','\u0300','\u0301','\u030b','\u030f','\u0312','\u0313','\u0314','\u033d','\u0309','\u0363','\u0364','\u0365','\u0366','\u0367','\u0368','\u0369','\u036a','\u036b','\u036c','\u036d','\u036e','\u036f','\u033e','\u035b','\u0346','\u031a' ];
-
-    const zeroWidth = ['\u200b', '\u200c', '\u200d', '\u2060'];
+    const base63map = Object.fromEntries([...base63chars].map((c,i)=>[c,i]));
 
     function toBase63(str) {
       const bytes = new TextEncoder().encode(str);
-      let binary = '';
-      for (let byte of bytes) binary += byte.toString(2).padStart(8, '0');
-      let output = '';
-      for (let i = 0; i < binary.length; i += 6) {
-        const chunk = binary.slice(i, i + 6);
-        const index = parseInt(chunk.padEnd(6, '0'), 2);
-        output += base63chars[index % 63];
+      let bits = '';
+      for (const b of bytes) bits += b.toString(2).padStart(8,'0');
+      let out = '';
+      for (let i=0; i<bits.length; i+=6) {
+        const chunk = bits.slice(i, i+6);
+        const idx = parseInt(chunk.padEnd(6,'0'), 2);
+        out += base63chars[idx % 63];
       }
-      return output;
+      return out;
     }
 
     function fromBase63(str) {
-      let binary = '';
-      for (let char of str) {
-        if (!(char in base63map)) return null;
-        binary += base63map[char].toString(2).padStart(6, '0');
+      let bits = '';
+      for (const ch of str) {
+        if (!(ch in base63map)) return null;
+        bits += base63map[ch].toString(2).padStart(6,'0');
       }
       const bytes = [];
-      for (let i = 0; i < binary.length; i += 8) {
-        const byte = binary.slice(i, i + 8);
-        if (byte.length === 8) bytes.push(parseInt(byte, 2));
+      for (let i=0; i<bits.length; i+=8) {
+        const byte = bits.slice(i, i+8);
+        if (byte.length === 8) bytes.push(parseInt(byte,2));
       }
-      return new TextDecoder().decode(new Uint8Array(bytes));
+      try {
+        return new TextDecoder().decode(new Uint8Array(bytes));
+      } catch {
+        return null;
+      }
     }
 
-    function toPigLatin(str) {
-      return str.split(/\s+/).map(word => {
-        if (/^[aeiou]/i.test(word)) return word + 'way';
-        const match = word.match(/^([^aeiou]+)(.*)/i);
-        return match ? match[2] + match[1] + 'ay' : word;
-      }).join(' ');
-    }
-
-    function fromPigLatin(str) {
-      return str.split(/\s+/).map(word => {
-        if (word.endsWith('way')) return word.slice(0, -3);
-        if (word.endsWith('ay')) {
-          const core = word.slice(0, -2);
-          const match = core.match(/(.*?)([^aeiou]+)$/i);
-          return match ? match[2] + match[1] : word;
-        }
-        return word;
-      }).join(' ');
-    }
-
+    // ---- Caesar + ROT13 + Reverse ----
     function caesarShift(str, shift) {
-      return str.split('').map(char => {
-        const code = char.charCodeAt(0);
-        if (code >= 65 && code <= 90) return String.fromCharCode((code - 65 + shift) % 26 + 65);
-        if (code >= 97 && code <= 122) return String.fromCharCode((code - 97 + shift) % 26 + 97);
-        return char;
-      }).join('');
-    }
-
-    function zalgoify(str) {
-      return str.split('').map(c => {
-        let noise = '';
-        for (let i = 0; i < 3; i++) {
-          noise += zalgoUp[Math.floor(Math.random() * zalgoUp.length)];
-        }
-        return c + noise;
-      }).join('');
-    }
-
-    function unzalgo(str) {
-      return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    }
-
-    function addZeroWidth(str) {
-      return str.split('').map(c => c + zeroWidth[Math.floor(Math.random() * zeroWidth.length)]).join('');
-    }
-
-    function removeZeroWidth(str) {
-      return str.replace(/[\u200b\u200c\u200d\u2060]/g, '');
+      return str.replace(/[A-Za-z]/g, ch => {
+        const base = ch <= 'Z' ? 65 : 97;
+        return String.fromCharCode((ch.charCodeAt(0) - base + shift) % 26 + base);
+      });
     }
 
     function rot13(str) {
-      return str.replace(/[a-zA-Z]/g, c => {
+      return str.replace(/[A-Za-z]/g, c => {
         const base = c <= 'Z' ? 65 : 97;
         return String.fromCharCode((c.charCodeAt(0) - base + 13) % 26 + base);
       });
     }
 
+    const reverseStr = s => [...s].reverse().join('');
+
+    // ---- Fake HTML tags ----
     function injectFakeTags(str) {
-      return str.split('').map(c => `<x>${c}</x>`).join('');
+      return [...str].map(c => `<x>${c}</x>`).join('');
     }
 
     function removeFakeTags(str) {
       return str.replace(/<x>(.*?)<\/x>/g, '$1');
     }
 
+    // ---- Zero-width ----
+    const zeroWidth = ['\u200b','\u200c','\u200d','\u2060','\ufeff'];
+    function addZeroWidth(str) {
+      return [...str].map((c,i) => c + zeroWidth[i % zeroWidth.length]).join('');
+    }
+    function removeZeroWidth(str) {
+      return str.replace(/[\u200b\u200c\u200d\u2060\ufeff]/g, '');
+    }
+
+    // ---- Base64 (UTF-8 safe) ----
+    function base64Encode(str) {
+      const bytes = new TextEncoder().encode(str);
+      let bin = '';
+      for (const b of bytes) bin += String.fromCharCode(b);
+      return btoa(bin);
+    }
+    function base64Decode(str) {
+      try {
+        const bin = atob(str);
+        const bytes = Uint8Array.from([...bin].map(c => c.charCodeAt(0)));
+        return new TextDecoder().decode(bytes);
+      } catch {
+        return null;
+      }
+    }
+
+    // ---- Pipeline ----
     function encode() {
-      let input = document.getElementById('input').value;
-      let step1 = toBase63(input);
-      let step2 = toPigLatin(step1);
-      let step3 = caesarShift(step2, 6);
-      let step4 = zalgoify(step3);
-      let step5 = step4.split('').reverse().join('');
-      let step6 = addZeroWidth(step5);
-      let step7 = rot13(step6);
-      let step8 = injectFakeTags(step7);
-      document.getElementById('output').textContent = step8;
+      const input = document.getElementById('input').value;
+
+      // 1) Base63 -> 2) Caesar(+6) -> 3) ROT13 -> 4) Reverse
+      // 5) Fake tags -> 6) Zero-width -> 7) Base64
+      const step1 = toBase63(input);
+      const step2 = caesarShift(step1, 6);
+      const step3 = rot13(step2);
+      const step4 = reverseStr(step3);
+      const step5 = injectFakeTags(step4);
+      const step6 = addZeroWidth(step5);
+      const step7 = base64Encode(step6);
+
+      document.getElementById('output').textContent = step7;
     }
 
     function decode() {
-      let input = document.getElementById('input').value;
-      let step1 = removeFakeTags(input);
-      let step2 = rot13(step1);
-      let step3 = removeZeroWidth(step2);
-      let step4 = step3.split('').reverse().join('');
-      let step5 = unzalgo(step4);
-      let step6 = caesarShift(step5, 26 - 6);
-      let step7 = fromPigLatin(step6);
-      let step8 = fromBase63(step7);
-      document.getElementById('output').textContent = step8 || '❌ Failed to decode';
+      // Strip accidental code fences
+      let input = document.getElementById('input').value.trim().replace(/^```|```$/g, '');
+
+      // Reverse pipeline:
+      // Base64 -> remove zero-width -> remove tags -> reverse -> ROT13 -> Caesar(-6) -> from Base63
+      const s0 = base64Decode(input);
+      if (s0 == null) return document.getElementById('output').textContent = '❌ Failed to decode (invalid Base64)';
+
+      const s1 = removeZeroWidth(s0);
+      const s2 = removeFakeTags(s1);
+      const s3 = reverseStr(s2);
+      const s4 = rot13(s3);
+      const s5 = caesarShift(s4, 26 - 6);
+      const s6 = fromBase63(s5);
+
+      document.getElementById('output').textContent = s6 ?? '❌ Failed to decode';
     }
 
     function copyOutput() {
       const text = document.getElementById('output').textContent;
-      navigator.clipboard.writeText(text).then(() => {
-        alert("Copied to clipboard!");
-      }).catch(err => {
-        alert("Copy failed: " + err);
-      });
+      navigator.clipboard.writeText(text).then(() => alert("Copied to clipboard!"))
+        .catch(err => alert("Copy failed: " + err));
+    }
+
+    function clearAll() {
+      document.getElementById('input').value = '';
+      document.getElementById('output').textContent = '';
     }
   </script>
 </body>

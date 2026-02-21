@@ -318,6 +318,7 @@ function startGame() {
 }
 
 function serializeState() {
+  // JSON round-trip strips internal host-only props (_input, _lastShot) before sending to clients
   return JSON.parse(JSON.stringify(state));
 }
 
@@ -468,8 +469,8 @@ function checkWinCondition() {
   } else if (alive.length === 0) {
     state.phase = 'ended';
     gameRunning = false;
-    var endMsg2 = { type: 'end', winner: 'Nobody' };
-    Object.values(connections).forEach(function(c) { try { c.send(endMsg2); } catch(e){} });
+    var noSurvivorsMsg = { type: 'end', winner: 'Nobody' };
+    Object.values(connections).forEach(function(c) { try { c.send(noSurvivorsMsg); } catch(e){} });
     showGameOver('Game Over', 'No survivors!');
   }
 }
@@ -578,6 +579,7 @@ function render() {
   }
 
   // Draw zone (outside = red tint)
+  // Rectangle + counter-clockwise arc creates a donut shape, filling only the danger zone outside the safe circle
   var z = state.zone;
   ctx.save();
   ctx.beginPath();

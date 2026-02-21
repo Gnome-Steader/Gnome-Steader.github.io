@@ -1,2 +1,2 @@
 # Gnome-Steader.github.io
-obfistcater
+Text obfuscater

@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Battle Royale</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; color: #eee; font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; }
+
+    /* ---- Lobby ---- */
+    #lobby {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100vh; gap: 18px;
+    }
+    #lobby h1 { font-size: 2.6em; color: #e94560; text-shadow: 0 0 20px #e94560; }
+    #lobby input, #lobby button {
+      font-size: 1.2em; padding: 12px 24px; border: none; border-radius: 8px; outline: none;
+    }
+    #lobby input {
+      background: #16213e; color: #eee; text-align: center; letter-spacing: 8px;
+      width: 260px; font-size: 1.6em;
+    }
+    #lobby input::placeholder { letter-spacing: 2px; font-size: 0.6em; color: #555; }
+    #lobby button {
+      cursor: pointer; font-weight: bold; transition: transform 0.1s;
+    }
+    #lobby button:active { transform: scale(0.95); }
+    #btnHost { background: #e94560; color: #fff; }
+    #btnJoin { background: #0f3460; color: #fff; }
+    #btnStart { background: #27ae60; color: #fff; display: none; font-size: 1.4em; padding: 14px 40px; }
+    #lobbyStatus { color: #aaa; font-size: 1em; min-height: 1.4em; }
+    #roomInfo {
+      background: #16213e; padding: 16px 32px; border-radius: 10px; text-align: center; display: none;
+    }
+    #roomInfo .code { font-size: 2.4em; letter-spacing: 10px; color: #e94560; font-weight: bold; }
+    #roomInfo .label { font-size: 0.9em; color: #888; margin-bottom: 4px; }
+    #playerList { color: #ccc; font-size: 0.95em; margin-top: 6px; }
+    .or-divider { color: #555; font-size: 0.9em; }
+    #nameInput { letter-spacing: 2px !important; font-size: 1.2em !important; width: 220px; }
+    #nameInput::placeholder { letter-spacing: 2px; font-size: 0.85em; }
+
+    /* ---- Game HUD ---- */
+    #gameContainer { display: none; position: relative; }
+    canvas { display: block; background: #2d5a27; }
+    #hud {
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      display: flex; justify-content: space-between; pointer-events: none;
+    }
+    #hudLeft, #hudRight { background: rgba(0,0,0,0.6); padding: 8px 14px; border-radius: 8px; }
+    #hudRight { text-align: right; }
+    .hp-bar { width: 160px; height: 14px; background: #333; border-radius: 7px; overflow: hidden; margin-top: 4px; }
+    .hp-fill { height: 100%; background: #27ae60; transition: width 0.2s; }
+    #killFeed {
+      position: absolute; top: 60px; right: 10px;
+      display: flex; flex-direction: column; gap: 4px; pointer-events: none;
+    }
+    .kill-msg {
+      background: rgba(0,0,0,0.7); padding: 4px 10px; border-radius: 4px;
+      font-size: 0.85em; color: #e94560; animation: fadeOut 4s forwards;
+    }
+    @keyframes fadeOut { 0%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+    #gameOver {
+      display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      background: rgba(0,0,0,0.85); padding: 40px 60px; border-radius: 16px; text-align: center;
+    }
+    #gameOver h2 { font-size: 2em; margin-bottom: 10px; }
+    #gameOver p { font-size: 1.2em; color: #aaa; }
+    #aliveCount { color: #e94560; font-weight: bold; }
+    #minimap {
+      position: absolute; bottom: 10px; right: 10px;
+      border: 2px solid rgba(255,255,255,0.3); border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ========== LOBBY ========== -->
+<div id="lobby">
+  <h1>⚔️ Battle Royale</h1>
+  <input id="nameInput" type="text" placeholder="Your Name" maxlength="12">
+  <button id="btnHost" onclick="hostGame()">Host Game</button>
+  <div class="or-divider">— or —</div>
+  <input id="codeInput" type="text" placeholder="6-digit code" maxlength="6"
+         oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+  <button id="btnJoin" onclick="joinGame()">Join Game</button>
+  <div id="roomInfo">
+    <div class="label">Room Code</div>
+    <div class="code" id="roomCode"></div>
+    <div id="playerList"></div>
+  </div>
+  <button id="btnStart" onclick="startGame()">Start Game</button>
+  <div id="lobbyStatus"></div>
+</div>
+
+<!-- ========== GAME ========== -->
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+  <div id="hud">
+    <div id="hudLeft">
+      <div id="hudName">Player</div>
+      <div class="hp-bar"><div class="hp-fill" id="hpFill"></div></div>
+    </div>
+    <div id="hudRight">
+      Alive: <span id="aliveCount">0</span>
+    </div>
+  </div>
+  <div id="killFeed"></div>
+  <canvas id="minimap" width="150" height="150"></canvas>
+  <div id="gameOver">
+    <h2 id="goTitle">Game Over</h2>
+    <p id="goSub"></p>
+  </div>
+</div>
+
+<script>
+// ===================== CONSTANTS =====================
+const PEER_PREFIX = 'gnbr-';
+const TICK_RATE  = 50;   // ms between state broadcasts
+const MAP_SIZE   = 3000;
+const PLAYER_R   = 16;
+const BULLET_SPD = 12;
+const BULLET_R   = 4;
+const BULLET_DMG = 18;
+const MOVE_SPD   = 4;
+const ZONE_DMG   = 2;       // damage per tick outside zone
+const ZONE_SHRINK_INTERVAL = 5000; // ms between zone shrinks
+const ZONE_SHRINK_AMOUNT   = 12;   // px radius shrink per interval
+const PLAYER_COLORS = [
+  '#e94560','#0f3460','#27ae60','#f39c12','#8e44ad',
+  '#1abc9c','#e67e22','#2980b9','#c0392b','#16a085',
+  '#d35400','#2c3e50','#7f8c8d','#e74c3c','#3498db'
+];
+const SHOOT_COOLDOWN = 250; // ms
+
+// ===================== STATE =====================
+let peer = null;
+let isHost = false;
+let myId = '';           // PeerJS id
+let myName = 'Player';
+let roomCode = '';
+let connections = {};    // peerId -> DataConnection (host only)
+let hostConn = null;     // DataConnection to host (client only)
+let gameRunning = false;
+let localInput = { up:false, down:false, left:false, right:false, mx:0, my:0, shoot:false };
+let lastShootTime = 0;
+
+// Authoritative game state (host keeps truth, clients receive copies)
+let state = {
+  players: {},   // id -> {x,y,hp,name,color,alive,kills}
+  bullets: [],   // {x,y,vx,vy,owner}
+  zone: { x: MAP_SIZE/2, y: MAP_SIZE/2, r: MAP_SIZE/2 },
+  phase: 'lobby' // lobby | playing | ended
+};
+
+// Camera
+let cam = { x:0, y:0 };
+
+// ===================== LOBBY =====================
+function setStatus(msg) { document.getElementById('lobbyStatus').textContent = msg; }
+
+function getPlayerName() {
+  const n = document.getElementById('nameInput').value.trim();
+  return n || 'Player';
+}
+
+function generateCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hostGame() {
+  myName = getPlayerName();
+  roomCode = generateCode();
+  const peerId = PEER_PREFIX + roomCode;
+  setStatus('Creating room…');
+  disableLobbyButtons();
+
+  peer = new Peer(peerId);
+  peer.on('open', function(id) {
+    myId = id;
+    isHost = true;
+    document.getElementById('roomCode').textContent = roomCode;
+    document.getElementById('roomInfo').style.display = 'block';
+    document.getElementById('btnStart').style.display = 'inline-block';
+    setStatus('Waiting for players…');
+
+    // Add host as player
+    addPlayer(myId, myName);
+    updatePlayerList();
+  });
+
+  peer.on('connection', function(conn) {
+    conn.on('open', function() {
+      conn.on('data', function(data) { handleHostData(conn, data); });
+    });
+    conn.on('close', function() { removeConnection(conn.peer); });
+  });
+
+  peer.on('error', function(err) {
+    setStatus('Error: ' + err.type);
+    enableLobbyButtons();
+  });
+}
+
+function joinGame() {
+  myName = getPlayerName();
+  roomCode = document.getElementById('codeInput').value.trim();
+  if (roomCode.length !== 6) { setStatus('Enter a valid 6-digit code'); return; }
+  const hostPeerId = PEER_PREFIX + roomCode;
+  setStatus('Connecting…');
+  disableLobbyButtons();
+
+  peer = new Peer();
+  peer.on('open', function(id) {
+    myId = id;
+    hostConn = peer.connect(hostPeerId, { reliable: true });
+    hostConn.on('open', function() {
+      setStatus('Connected! Waiting for host to start…');
+      hostConn.send({ type: 'join', name: myName });
+      document.getElementById('roomCode').textContent = roomCode;
+      document.getElementById('roomInfo').style.display = 'block';
+    });
+    hostConn.on('data', function(data) { handleClientData(data); });
+    hostConn.on('close', function() {
+      if (gameRunning) { showGameOver('Disconnected', 'Host left the game'); }
+      else { setStatus('Disconnected from host'); enableLobbyButtons(); }
+    });
+  });
+
+  peer.on('error', function(err) {
+    setStatus('Error: ' + err.type + '. Is the code correct?');
+    enableLobbyButtons();
+  });
+}
+
+function disableLobbyButtons() {
+  document.getElementById('btnHost').disabled = true;
+  document.getElementById('btnJoin').disabled = true;
+}
+function enableLobbyButtons() {
+  document.getElementById('btnHost').disabled = false;
+  document.getElementById('btnJoin').disabled = false;
+}
+
+function addPlayer(id, name) {
+  const idx = Object.keys(state.players).length;
+  state.players[id] = {
+    x: MAP_SIZE/2 + (Math.random()-0.5)*800,
+    y: MAP_SIZE/2 + (Math.random()-0.5)*800,
+    hp: 100, name: name, color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
+    alive: true, kills: 0
+  };
+}
+
+function removeConnection(peerId) {
+  delete connections[peerId];
+  if (state.players[peerId]) {
+    state.players[peerId].alive = false;
+    state.players[peerId].hp = 0;
+  }
+  updatePlayerList();
+}
+
+function updatePlayerList() {
+  const names = Object.values(state.players).map(function(p) { return p.name; });
+  document.getElementById('playerList').textContent = names.join(', ') + ' (' + names.length + ' players)';
+}
+
+// ===================== HOST LOGIC =====================
+function handleHostData(conn, data) {
+  if (data.type === 'join') {
+    connections[conn.peer] = conn;
+    addPlayer(conn.peer, data.name || 'Player');
+    updatePlayerList();
+    // send current lobby state to everyone
+    broadcastLobby();
+  } else if (data.type === 'input') {
+    if (state.players[conn.peer] && state.players[conn.peer].alive) {
+      state.players[conn.peer]._input = data.input;
+    }
+  }
+}
+
+function broadcastLobby() {
+  var names = Object.values(state.players).map(function(p) { return p.name; });
+  var msg = { type: 'lobby', names: names, count: names.length };
+  Object.values(connections).forEach(function(c) { try { c.send(msg); } catch(e){} });
+}
+
+function startGame() {
+  if (Object.keys(state.players).length < 1) { setStatus('Need at least 1 player'); return; }
+
+  // Spread players around the map edge
+  var ids = Object.keys(state.players);
+  ids.forEach(function(id, i) {
+    var angle = (2 * Math.PI * i) / ids.length;
+    var spawnR = MAP_SIZE * 0.35;
+    state.players[id].x = MAP_SIZE/2 + Math.cos(angle) * spawnR;
+    state.players[id].y = MAP_SIZE/2 + Math.sin(angle) * spawnR;
+    state.players[id].hp = 100;
+    state.players[id].alive = true;
+    state.players[id].kills = 0;
+  });
+
+  state.bullets = [];
+  state.zone = { x: MAP_SIZE/2, y: MAP_SIZE/2, r: MAP_SIZE/2 };
+  state.phase = 'playing';
+  gameRunning = true;
+
+  // Notify clients to start
+  var startMsg = { type: 'start', state: serializeState() };
+  Object.values(connections).forEach(function(c) { try { c.send(startMsg); } catch(e){} });
+
+  showGameUI();
+  hostGameLoop();
+  zoneShrinkLoop();
+}
+
+function serializeState() {
+  return JSON.parse(JSON.stringify(state));
+}
+
+function hostGameLoop() {
+  if (!gameRunning) return;
+
+  // Process host input
+  processInput(myId, localInput);
+
+  // Process each client input
+  Object.keys(connections).forEach(function(pid) {
+    if (state.players[pid] && state.players[pid]._input) {
+      processInput(pid, state.players[pid]._input);
+    }
+  });
+
+  // Update bullets
+  updateBullets();
+
+  // Zone damage
+  applyZoneDamage();
+
+  // Check win
+  checkWinCondition();
+
+  // Broadcast state
+  var msg = { type: 'state', state: serializeState() };
+  Object.values(connections).forEach(function(c) { try { c.send(msg); } catch(e){} });
+
+  setTimeout(hostGameLoop, TICK_RATE);
+}
+
+function processInput(pid, input) {
+  var p = state.players[pid];
+  if (!p || !p.alive) return;
+
+  var dx = 0, dy = 0;
+  if (input.up)    dy -= MOVE_SPD;
+  if (input.down)  dy += MOVE_SPD;
+  if (input.left)  dx -= MOVE_SPD;
+  if (input.right) dx += MOVE_SPD;
+
+  // Normalize diagonal
+  if (dx !== 0 && dy !== 0) {
+    dx *= 0.707;
+    dy *= 0.707;
+  }
+
+  p.x = Math.max(PLAYER_R, Math.min(MAP_SIZE - PLAYER_R, p.x + dx));
+  p.y = Math.max(PLAYER_R, Math.min(MAP_SIZE - PLAYER_R, p.y + dy));
+
+  // Shooting
+  if (input.shoot && input.mx !== undefined) {
+    var now = Date.now();
+    if (!p._lastShot || now - p._lastShot > SHOOT_COOLDOWN) {
+      p._lastShot = now;
+      var angle = Math.atan2(input.my - p.y, input.mx - p.x);
+      state.bullets.push({
+        x: p.x + Math.cos(angle) * (PLAYER_R + 6),
+        y: p.y + Math.sin(angle) * (PLAYER_R + 6),
+        vx: Math.cos(angle) * BULLET_SPD,
+        vy: Math.sin(angle) * BULLET_SPD,
+        owner: pid,
+        life: 80
+      });
+      input.shoot = false; // consume
+    }
+  }
+}
+
+function updateBullets() {
+  for (var i = state.bullets.length - 1; i >= 0; i--) {
+    var b = state.bullets[i];
+    b.x += b.vx;
+    b.y += b.vy;
+    b.life--;
+
+    // Out of bounds or expired
+    if (b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE || b.life <= 0) {
+      state.bullets.splice(i, 1);
+      continue;
+    }
+
+    // Hit detection
+    var hit = false;
+    Object.keys(state.players).forEach(function(pid) {
+      if (hit) return;
+      if (pid === b.owner) return;
+      var p = state.players[pid];
+      if (!p.alive) return;
+      var dx = p.x - b.x, dy = p.y - b.y;
+      if (dx*dx + dy*dy < (PLAYER_R + BULLET_R) * (PLAYER_R + BULLET_R)) {
+        p.hp -= BULLET_DMG;
+        if (p.hp <= 0) {
+          p.hp = 0;
+          p.alive = false;
+          if (state.players[b.owner]) state.players[b.owner].kills++;
+          broadcastKill(state.players[b.owner] ? state.players[b.owner].name : '?', p.name);
+        }
+        hit = true;
+      }
+    });
+    if (hit) state.bullets.splice(i, 1);
+  }
+}
+
+function applyZoneDamage() {
+  var z = state.zone;
+  Object.keys(state.players).forEach(function(pid) {
+    var p = state.players[pid];
+    if (!p.alive) return;
+    var dx = p.x - z.x, dy = p.y - z.y;
+    if (dx*dx + dy*dy > z.r * z.r) {
+      p.hp -= ZONE_DMG;
+      if (p.hp <= 0) {
+        p.hp = 0;
+        p.alive = false;
+        broadcastKill('Zone', p.name);
+      }
+    }
+  });
+}
+
+function zoneShrinkLoop() {
+  if (!gameRunning) return;
+  if (state.zone.r > 80) {
+    state.zone.r = Math.max(80, state.zone.r - ZONE_SHRINK_AMOUNT);
+  }
+  setTimeout(zoneShrinkLoop, ZONE_SHRINK_INTERVAL);
+}
+
+function broadcastKill(killer, victim) {
+  var msg = { type: 'kill', killer: killer, victim: victim };
+  Object.values(connections).forEach(function(c) { try { c.send(msg); } catch(e){} });
+  addKillFeedMsg(killer, victim);
+}
+
+function checkWinCondition() {
+  var alive = Object.values(state.players).filter(function(p) { return p.alive; });
+  if (alive.length <= 1 && Object.keys(state.players).length > 1) {
+    state.phase = 'ended';
+    gameRunning = false;
+    var winner = alive.length === 1 ? alive[0].name : 'Nobody';
+    var endMsg = { type: 'end', winner: winner };
+    Object.values(connections).forEach(function(c) { try { c.send(endMsg); } catch(e){} });
+    showGameOver(winner === myName ? 'Victory Royale!' : 'Game Over',
+                 winner + ' wins!');
+  } else if (alive.length === 0) {
+    state.phase = 'ended';
+    gameRunning = false;
+    var endMsg2 = { type: 'end', winner: 'Nobody' };
+    Object.values(connections).forEach(function(c) { try { c.send(endMsg2); } catch(e){} });
+    showGameOver('Game Over', 'No survivors!');
+  }
+}
+
+// ===================== CLIENT LOGIC =====================
+function handleClientData(data) {
+  if (data.type === 'lobby') {
+    document.getElementById('playerList').textContent =
+      data.names.join(', ') + ' (' + data.count + ' players)';
+  } else if (data.type === 'start') {
+    state = data.state;
+    gameRunning = true;
+    showGameUI();
+    clientRenderLoop();
+    clientInputLoop();
+  } else if (data.type === 'state') {
+    state = data.state;
+  } else if (data.type === 'kill') {
+    addKillFeedMsg(data.killer, data.victim);
+  } else if (data.type === 'end') {
+    gameRunning = false;
+    var me = state.players[myId];
+    var won = me && me.alive;
+    showGameOver(won ? 'Victory Royale!' : 'Game Over', data.winner + ' wins!');
+  }
+}
+
+function clientInputLoop() {
+  if (!gameRunning) return;
+  if (hostConn && hostConn.open) {
+    hostConn.send({ type: 'input', input: {
+      up: localInput.up, down: localInput.down,
+      left: localInput.left, right: localInput.right,
+      mx: localInput.mx, my: localInput.my,
+      shoot: localInput.shoot
+    }});
+    localInput.shoot = false;
+  }
+  setTimeout(clientInputLoop, TICK_RATE);
+}
+
+// ===================== RENDERING =====================
+var canvas, ctx, minimapCanvas, minimapCtx;
+
+function showGameUI() {
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('gameContainer').style.display = 'block';
+  canvas = document.getElementById('gameCanvas');
+  ctx = canvas.getContext('2d');
+  minimapCanvas = document.getElementById('minimap');
+  minimapCtx = minimapCanvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  var me = state.players[myId];
+  if (me) document.getElementById('hudName').textContent = me.name;
+
+  if (isHost) {
+    // host renders in hostGameLoop -> we just need a render loop
+    requestAnimationFrame(renderLoop);
+  }
+}
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+function clientRenderLoop() {
+  if (!gameRunning && state.phase !== 'ended') return;
+  renderLoop();
+}
+
+function renderLoop() {
+  render();
+  requestAnimationFrame(function() {
+    if (gameRunning || state.phase === 'ended') renderLoop();
+  });
+}
+
+function render() {
+  var w = canvas.width, h = canvas.height;
+  var me = state.players[myId];
+
+  // Camera follows player
+  if (me) {
+    cam.x = me.x - w/2;
+    cam.y = me.y - h/2;
+  }
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(-cam.x, -cam.y);
+
+  // Draw ground grid
+  ctx.fillStyle = '#2d5a27';
+  ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  var gridSize = 100;
+  for (var gx = 0; gx <= MAP_SIZE; gx += gridSize) {
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, MAP_SIZE); ctx.stroke();
+  }
+  for (var gy = 0; gy <= MAP_SIZE; gy += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(MAP_SIZE, gy); ctx.stroke();
+  }
+
+  // Draw zone (outside = red tint)
+  var z = state.zone;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, MAP_SIZE, MAP_SIZE);
+  ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2, true);
+  ctx.fillStyle = 'rgba(233, 69, 96, 0.25)';
+  ctx.fill();
+  ctx.restore();
+
+  // Zone border
+  ctx.beginPath();
+  ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#e94560';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Draw bullets
+  ctx.fillStyle = '#ffeb3b';
+  state.bullets.forEach(function(b) {
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, BULLET_R, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Draw players
+  Object.keys(state.players).forEach(function(pid) {
+    var p = state.players[pid];
+    if (!p.alive) return;
+
+    // Body
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = pid === myId ? '#fff' : '#000';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Name
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.name, p.x, p.y - PLAYER_R - 14);
+
+    // HP bar
+    var barW = 36, barH = 5;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(p.x - barW/2, p.y - PLAYER_R - 10, barW, barH);
+    ctx.fillStyle = p.hp > 50 ? '#27ae60' : p.hp > 25 ? '#f39c12' : '#e74c3c';
+    ctx.fillRect(p.x - barW/2, p.y - PLAYER_R - 10, barW * (p.hp / 100), barH);
+  });
+
+  // Map border
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+  ctx.restore();
+
+  // HUD
+  if (me) {
+    document.getElementById('hpFill').style.width = Math.max(0, me.hp) + '%';
+    document.getElementById('hpFill').style.background =
+      me.hp > 50 ? '#27ae60' : me.hp > 25 ? '#f39c12' : '#e74c3c';
+  }
+  var aliveCount = Object.values(state.players).filter(function(p) { return p.alive; }).length;
+  document.getElementById('aliveCount').textContent = aliveCount;
+
+  // Minimap
+  renderMinimap();
+}
+
+function renderMinimap() {
+  var mw = minimapCanvas.width, mh = minimapCanvas.height;
+  var scale = mw / MAP_SIZE;
+  minimapCtx.fillStyle = '#1a1a2e';
+  minimapCtx.fillRect(0, 0, mw, mh);
+
+  // Zone
+  var z = state.zone;
+  minimapCtx.beginPath();
+  minimapCtx.arc(z.x * scale, z.y * scale, z.r * scale, 0, Math.PI * 2);
+  minimapCtx.strokeStyle = '#e94560';
+  minimapCtx.lineWidth = 1;
+  minimapCtx.stroke();
+
+  // Players
+  Object.keys(state.players).forEach(function(pid) {
+    var p = state.players[pid];
+    if (!p.alive) return;
+    minimapCtx.fillStyle = pid === myId ? '#fff' : p.color;
+    minimapCtx.fillRect(p.x * scale - 2, p.y * scale - 2, 4, 4);
+  });
+}
+
+function addKillFeedMsg(killer, victim) {
+  var feed = document.getElementById('killFeed');
+  var div = document.createElement('div');
+  div.className = 'kill-msg';
+  div.textContent = killer + ' eliminated ' + victim;
+  feed.appendChild(div);
+  setTimeout(function() { if (div.parentNode) div.parentNode.removeChild(div); }, 4500);
+}
+
+function showGameOver(title, sub) {
+  document.getElementById('gameOver').style.display = 'block';
+  document.getElementById('goTitle').textContent = title;
+  document.getElementById('goSub').textContent = sub;
+}
+
+// ===================== INPUT =====================
+document.addEventListener('keydown', function(e) {
+  switch (e.key.toLowerCase()) {
+    case 'w': case 'arrowup':    localInput.up = true; break;
+    case 's': case 'arrowdown':  localInput.down = true; break;
+    case 'a': case 'arrowleft':  localInput.left = true; break;
+    case 'd': case 'arrowright': localInput.right = true; break;
+  }
+});
+
+document.addEventListener('keyup', function(e) {
+  switch (e.key.toLowerCase()) {
+    case 'w': case 'arrowup':    localInput.up = false; break;
+    case 's': case 'arrowdown':  localInput.down = false; break;
+    case 'a': case 'arrowleft':  localInput.left = false; break;
+    case 'd': case 'arrowright': localInput.right = false; break;
+  }
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (!canvas) return;
+  localInput.mx = e.clientX + cam.x;
+  localInput.my = e.clientY + cam.y;
+});
+
+document.addEventListener('mousedown', function(e) {
+  if (!gameRunning) return;
+  if (e.button === 0) {
+    localInput.shoot = true;
+    localInput.mx = e.clientX + cam.x;
+    localInput.my = e.clientY + cam.y;
+  }
+});
+</script>
+</body>
+</html>
